@@ -27,3 +27,6 @@ class EditForm(Form):
                 "This nickname is already in use. Please choose another one.")
             return False
         return True
+
+class PostForm(Form):
+    post = TextField('post', validators=[Required()])

@@ -11,7 +11,7 @@
 	[
 		{
 			"follow_symlinks": true,
-			"path": "app"
+			"path": "."
 		}
 	]
 }

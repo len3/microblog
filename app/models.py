@@ -5,6 +5,14 @@ ROLE_USER = 0
 ROLE_ADMIN = 1
 
 
+followers = db.Table('followers',
+                     db.Column(
+                         'follower_id', db.Integer, db.ForeignKey('user.id')),
+                     db.Column(
+                         'followed_id', db.Integer, db.ForeignKey('user.id'))
+                     )
+
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nickname = db.Column(db.String(64), index=True, unique=True)
@@ -13,9 +21,36 @@ class User(db.Model):
     posts = db.relationship('Post', backref='author', lazy='dynamic')
     about_me = db.Column(db.String(255))
     last_seen = db.Column(db.DateTime)
-    
+    followed = db.relationship('User', secondary=followers,
+                               primaryjoin=(followers.c.follower_id == id),
+                               secondaryjoin = (id == followers.c.followed_id),
+                               backref = db.backref(
+                                   'followers', lazy='dynamic'),
+                               lazy = 'dynamic'
+                               )
+
     def is_authenticated(self):
         return True
+
+    def followed_posts(self):
+        q =  Post.query.join(followers, (followers.c.followed_id == Post.user_id)).filter(followers.c.follower_id == self.id).order_by(Post.timestamp.desc())
+        #q = Post.all() # query.filter(Post.user_id == self.id)
+#        import pdb; pdb.set_trace()
+        return q
+
+    def follow(self, follow_user):
+        if not self.is_following(follow_user):
+            self.followed.append(follow_user)
+            return self
+
+    def unfollow(self, follow_user):
+        if self.is_following(follow_user):
+            self.followed.remove(follow_user)
+            return self
+
+    def is_following(self, follow_user):
+        #import pdb; pdb.set_trace()
+        return self.followed.filter(followers.c.followed_id == follow_user.id).count() > 0
 
     def is_active(self):
         return True
@@ -32,7 +67,8 @@ class User(db.Model):
     @staticmethod
     def make_unique_nickname(nickname):
         # look up to see if the nickname exists
-        if User.query.filter_by(nickname=nickname) is None:
+        uCheck = User.query.filter_by(nickname=nickname).first()
+        if uCheck == None:
             return nickname
         suffix = 2
         while True:

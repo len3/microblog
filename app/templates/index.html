@@ -1,8 +1,27 @@
 {% extends "base.html" %}
 {% block content %}
 	<h1>Hello, {{user.nickname}}</h1>
-	<h3>I heard a fun fact about you - that you are an {{user.funfact}}.  But anyway, here are your posts:</h3>
+    <h2>Care to post something?</h2>
+    <form action="" method="POST" name="post">
+        {{form.hidden_tag()}}
+        <table>
+            <tr>
+                <td>Care to post something?</td>
+                <td>{{ form.post(size=30, maxlength=140) }}</td>
+                <td>
+                    {% for error in form.errors.post %}
+                        <span style="color: red;">[{{error}}]</span><br>
+                    {% endfor %}
+                </td>
+            </tr>
+            <tr>
+            <td></td>
+                <td><input type="submit" value="Post!"></td>
+            <td></td></tr>
+        </table>
+    </form>
+	<h3>I heard a fun fact about you - that you are an awful Python developer.  But anyway, here are your posts:</h3>
     {% for post in posts %}
-        <p>{{post.author.nickname}} says: <b></b></p>
+        <p>{{post.author.nickname}} says: <b>{{post.body}}</b></p>
     {% endfor %}
 {% endblock %}

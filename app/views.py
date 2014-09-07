@@ -1,8 +1,8 @@
 from flask import render_template, flash, redirect, session, url_for, request, g
 from flask.ext.login import login_user, logout_user, current_user, login_required
 from app import app, db, lm, oid
-from forms import LoginForm, EditForm
-from models import User, ROLE_USER, ROLE_ADMIN
+from forms import LoginForm, EditForm, PostForm
+from models import User, ROLE_USER, ROLE_ADMIN, Post
 from datetime import datetime
 
 
@@ -15,23 +15,21 @@ def before_request():
         db.session.commit()
 
 
-@app.route('/')
-@app.route('/index')
+@app.route('/', methods=['GET', 'POST'])
+@app.route('/index', methods=['GET', 'POST'])
 @login_required
 def index():
     user = g.user
-    posts = [  # fake array of posts
-        {
-            'author': {'nickname': 'John'},
-            'body': 'Beautiful day in Portland!'
-        },
-        {
-            'author': {'nickname': 'Susan'},
-            'body': 'The Avengers movie was so cool!'
-        }
-    ]
+    posts = g.user.followed_posts().all()
+    form = PostForm()
+    if form.validate_on_submit():
+        post = Post(body=form.post.data, timestamp=datetime.utcnow(), author=g.user)
+        db.session.add(post)
+        db.session.commit()
+        flash("Posted!")
+        return redirect(url_for('index'))
     return render_template("index.html", title="home sweet home!",
-                           user=user,
+                           user=user, form=form,
                            posts=posts)
 
 
@@ -49,6 +47,56 @@ def login():
     return render_template('login.html', title="Sign In", form=form,
                            providers=app.config['OPENID_PROVIDERS'])
 
+@app.route('/follow/<nickname>')
+@login_required
+def follow(nickname):
+    user_to_follow = User.query.filter_by(nickname=nickname).first()
+    if user_to_follow == None:
+        flash("Cannot follow the user %s because that user does not exist." % (nickname))
+        return redirect(url_for('index'))
+
+    if user_to_follow == g.user:
+        flash("You can't follow yourself!")
+        return redirect(url_for('user', nickname=nickname))
+
+    if g.user.is_following(user_to_follow):
+        flash("You are already following %s." % nickname)
+        return redirect(url_for('user', nickname=nickname))
+
+    #otherwise
+    u = g.user.follow(user_to_follow)
+    if u is None:
+        flash("Cannot follow %s" % nickname)
+        return redirect_for('user', nickname=nickname)
+    db.session.add(u)
+    db.session.commit()
+    flash("You are now following %s" % (nickname))
+    return redirect(url_for('user', nickname=nickname))
+
+
+@app.route('/unfollow/<nickname>')
+@login_required
+def unfollow(nickname):
+    user_to_unfollow = User.query.filter_by(nickname=nickname).first()
+    if user_to_unfollow == None:
+        flash("Cannot unfollow the user %s because that user does not exist." % (nickname))
+        return redirect(url_for('index'))
+    if user_to_unfollow == g.user:
+        flash("You can't unfollow yourself!")
+        return redirect(url_for('user', nickname=nickname))
+    if not g.user.is_following(user_to_unfollow):
+        flash ("You are not following %s" % (nickname))
+        return redirect(url_for('user', nickname=nickname))
+
+    u = g.user.unfollow(user_to_unfollow)
+    if u is None:
+        flash("Cannot unfollow %s" % nickname)
+        return redirect_for('user', nickname = nickname)
+    db.session.add(u)
+    db.session.commit()
+    flash("You are no longer following %s" % (nickname))
+    return redirect(url_for('user', nickname=nickname))
+
 
 @oid.after_login
 def after_login(resp):
@@ -63,6 +111,8 @@ def after_login(resp):
         nickname = User.make_unique_nickname(nickname)
         user = User(nickname=nickname, email=resp.email, role=ROLE_USER)
         db.session.add(user)
+        db.session.commit()
+        db.session.add(user.follow(user))
         db.session.commit()
     remember_me = False
     if 'remember_me' in session:
@@ -89,6 +139,7 @@ def user(nickname):
         {'author': user,
          'body': "this is a test post numero dos equis."}
     ]
+    print "about to render user.html"
     return render_template('user.html', user=user, posts=posts)
 
 
