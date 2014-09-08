@@ -1,3 +1,6 @@
 flask/
 tmp/
 *.*sublime*
+*.sublime-project
+
+*.sublime-workspace
